@@ -1,0 +1,1187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f0f14">
+<meta name="description" content="通用运动前热身教练 — RAMP 三阶段动态热身，支持语音命令与智能手表">
+<title>热身教练 · Warm-Up Coach</title>
+<link rel="manifest" id="pwa-manifest" href="data:application/json;base64,">
+<style>
+/* ===== RESET & BASE ===== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:16px;height:100dvh;overflow:hidden}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei","Helvetica Neue",sans-serif;
+  background:#0f0f14;color:#e8e8ed;height:100dvh;overflow:hidden;
+  -webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;
+  touch-action:manipulation;
+}
+#app{height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1rem;position:relative}
+
+/* ===== DEVICE BADGE ===== */
+#device-badge{
+  position:fixed;top:.5rem;right:.5rem;font-size:.65rem;padding:.2rem .5rem;
+  border-radius:2rem;background:#1a1a24;color:#6b7280;z-index:100;
+  opacity:.6;border:1px solid #2a2a3a;
+}
+#voice-status{
+  position:fixed;top:.5rem;left:.5rem;font-size:.65rem;padding:.2rem .5rem;
+  border-radius:2rem;z-index:100;display:none;
+}
+#voice-status.listening{display:flex;align-items:center;gap:.3rem;background:#1a3a1a;color:#22c55e;border:1px solid #22c55e}
+#voice-status.denied{display:flex;align-items:center;gap:.3rem;background:#3a1a1a;color:#ef4444;border:1px solid #ef4444}
+#voice-status .pulse-dot{width:8px;height:8px;border-radius:50%;background:#22c55e;animation:pulse 1s ease infinite}
+
+/* ===== RING & CANE BADGES ===== */
+#ring-status{position:fixed;top:2.3rem;right:.5rem;font-size:.65rem;padding:.2rem .5rem;border-radius:2rem;z-index:100;display:none;background:#1a1a24;color:#6b7280;border:1px solid #2a2a3a}
+#ring-status.active{display:flex;align-items:center;gap:.3rem;background:#1a2a3a;color:#60a5fa;border:1px solid #60a5fa}
+#cane-status{position:fixed;top:4.1rem;right:.5rem;font-size:.65rem;padding:.2rem .5rem;border-radius:2rem;z-index:100;display:none;background:#1a1a24;color:#6b7280;border:1px solid #2a2a3a}
+#cane-status.active{display:flex;align-items:center;gap:.3rem;background:#2a1a3a;color:#c084fc;border:1px solid #c084fc}
+
+/* ===== SCREENS ===== */
+.screen{display:none;width:100%;max-width:520px;flex-direction:column;align-items:center;height:100%;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:1rem}
+.screen.active{display:flex}
+
+/* ===== SPORT PICKER ===== */
+#sport-screen{justify-content:center}
+#sport-screen h1{
+  font-size:clamp(1.4rem,5vw,2.4rem);font-weight:900;
+  background:linear-gradient(135deg,#f97316,#ef4444,#ec4899);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  margin-bottom:.25rem;text-align:center;
+}
+#sport-screen .subtitle{color:#9ca3af;font-size:.9rem;margin-bottom:1.5rem;text-align:center}
+.sport-grid{display:grid;grid-template-columns:1fr 1fr;gap:.65rem;width:100%;margin-bottom:1.5rem}
+@media(min-width:420px){.sport-grid{grid-template-columns:1fr 1fr 1fr}}
+.sport-btn{
+  background:#1a1a24;border:2px solid #2a2a3a;border-radius:1.2rem;
+  padding:1.2rem .5rem;color:#d1d5db;font-size:clamp(.9rem,3vw,1.15rem);font-weight:700;
+  cursor:pointer;transition:all .2s;text-align:center;min-height:5.5rem;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+}
+.sport-btn:active{border-color:#f97316;background:#1f1f2e;color:#fff;transform:scale(.96)}
+.sport-btn .emoji{font-size:1.8rem;display:block;margin-bottom:.35rem}
+@media(max-width:280px){.sport-btn .emoji{font-size:1.4rem}.sport-btn{font-size:.8rem;min-height:4.5rem;padding:.8rem .3rem}}
+
+/* ===== VOICE START HINT ===== */
+.voice-hint-bar{
+  background:#1a2a1a;border:1px solid #2a4a2a;border-radius:.8rem;padding:.5rem 1rem;
+  color:#4ade80;font-size:.8rem;text-align:center;margin-top:.5rem;width:100%;
+}
+
+/* ===== WORKOUT SCREEN ===== */
+#workout-screen{justify-content:flex-start;padding-top:.5rem}
+
+/* phase dots */
+.phase-dots{display:flex;gap:.4rem;margin-bottom:1rem;flex-shrink:0}
+.phase-dot{width:2rem;height:.3rem;border-radius:1rem;background:#2a2a3a;transition:all .3s}
+.phase-dot.active{background:#f97316;width:3rem}
+.phase-dot.done{background:#22c55e}
+.phase-label{font-size:.8rem;color:#9ca3af;margin-bottom:.3rem;letter-spacing:.05em}
+.phase-title{
+  font-size:clamp(1.1rem,4vw,1.6rem);font-weight:800;margin-bottom:1rem;
+  background:linear-gradient(135deg,#f97316,#ef4444);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+
+/* timer ring */
+.timer-container{position:relative;width:clamp(10rem,30vw,14rem);height:clamp(10rem,30vw,14rem);margin:0 auto .8rem;flex-shrink:0}
+@media(min-width:480px){.timer-container{width:16rem;height:16rem}}
+.timer-ring{transform:rotate(-90deg);width:100%;height:100%}
+.timer-ring .bg{fill:none;stroke:#2a2a3a;stroke-width:6}
+.timer-ring .progress{fill:none;stroke:url(#ringGrad);stroke-width:6;stroke-linecap:round;transition:stroke-dashoffset .3s linear}
+.timer-text{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.timer-text .time{font-size:clamp(2.4rem,10vw,3.8rem);font-weight:900;font-variant-numeric:tabular-nums;line-height:1}
+.timer-text .unit-label{font-size:.85rem;color:#9ca3af;margin-top:.15rem}
+.timer-text .rep-label{font-size:1.2rem;font-weight:700;color:#f97316}
+/* pause overlay */
+.timer-paused{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(15,15,20,.7);border-radius:50%;opacity:0;pointer-events:none;transition:opacity .3s}
+.timer-paused.show{opacity:1}
+.timer-paused span{font-size:2rem}
+
+/* exercise card */
+.ex-card{
+  background:#1a1a24;border:1px solid #2a2a3a;border-radius:1.25rem;
+  padding:clamp(.8rem,2vw,1.5rem);width:100%;margin-bottom:.8rem;text-align:center;flex-shrink:0;
+}
+.ex-card .ex-cn{font-size:clamp(1.3rem,5vw,2.2rem);font-weight:800;margin-bottom:.2rem;line-height:1.2}
+.ex-card .ex-en{font-size:.85rem;color:#6b7280;margin-bottom:.5rem}
+.ex-card .ex-breathe{font-size:.75rem;color:#4ade80;margin-bottom:.4rem;min-height:1.2em}
+.ex-card .ex-meta{display:flex;justify-content:center;gap:.8rem;margin-bottom:.5rem;font-size:.8rem;flex-wrap:wrap}
+.ex-card .ex-meta span{background:#252533;padding:.3rem .7rem;border-radius:2rem;color:#d1d5db}
+.ex-card .ex-meta .highlight{color:#f97316;font-weight:700}
+.ex-card .ex-cues{font-size:.8rem;color:#9ca3af;line-height:1.5;margin-top:.4rem;padding:.4rem .7rem;background:#14141e;border-radius:.75rem}
+
+/* exercise counter */
+.ex-counter{font-size:.75rem;color:#6b7280;margin-bottom:.6rem;flex-shrink:0}
+
+/* voice command hint */
+.voice-cmd-hint{font-size:.7rem;color:#4a5a3a;margin-bottom:.5rem;min-height:1.2em;text-align:center}
+
+/* buttons */
+.btn-row{display:flex;gap:.5rem;width:100%;flex-shrink:0}
+.btn{flex:1;padding:.75rem .5rem;border-radius:.85rem;font-size:clamp(.8rem,2.5vw,1rem);font-weight:700;border:none;cursor:pointer;transition:all .15s;text-align:center;min-height:3rem}
+.btn:active{transform:scale(.96)}
+.btn-primary{background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;box-shadow:0 4px 16px rgba(249,115,22,.25)}
+.btn-secondary{background:#252533;color:#d1d5db;border:1px solid #3a3a4a}
+.btn-skip{background:transparent;color:#6b7280;border:1px solid #3a3a4a}
+.btn-mic{flex:0 0 3rem;min-width:3rem;border-radius:50%;font-size:1.2rem;display:flex;align-items:center;justify-content:center;background:#252533;border:1px solid #3a3a4a;color:#d1d5db;cursor:pointer}
+.btn-mic.active{background:#1a3a1a;border-color:#22c55e;color:#22c55e;animation:pulse 1.5s ease infinite}
+
+/* ===== COMPLETE SCREEN ===== */
+#complete-screen{justify-content:center;text-align:center}
+#complete-screen .celebration{font-size:4rem;animation:bounce .6s ease infinite alternate}
+@keyframes bounce{from{transform:translateY(0)}to{transform:translateY(-12px)}}
+#complete-screen h2{font-size:clamp(1.5rem,6vw,2.2rem);font-weight:900;margin:.5rem 0;background:linear-gradient(135deg,#22c55e,#10b981,#14b8a6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+#complete-screen .motivation{color:#9ca3af;font-size:.95rem;margin-bottom:.5rem;line-height:1.6}
+#complete-screen .stats{display:flex;gap:1.5rem;justify-content:center;margin:1rem 0}
+#complete-screen .stat{text-align:center}
+#complete-screen .stat .val{font-size:2rem;font-weight:900;color:#f97316}
+#complete-screen .stat .lbl{font-size:.8rem;color:#6b7280}
+
+/* ===== ANIMATIONS ===== */
+.hidden{display:none!important}
+.fade-in{animation:fadeIn .35s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.countdown-flash{animation:pulse .5s ease}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+
+/* ===== SWIPE INDICATOR ===== */
+@media(max-width:480px){
+  #workout-screen::after{
+    content:"";position:absolute;bottom:.5rem;left:50%;transform:translateX(-50%);
+    width:3rem;height:.25rem;background:#3a3a4a;border-radius:1rem;opacity:.5;
+  }
+}
+
+/* ===== WATCH MODE (<250px) ===== */
+@media(max-width:250px){
+  html{font-size:14px}
+  #app{padding:.4rem}
+  #sport-screen h1{font-size:1.1rem}
+  .sport-grid{gap:.35rem}
+  .sport-btn{padding:.6rem .2rem;min-height:3.8rem;font-size:.7rem;border-radius:.8rem}
+  .sport-btn .emoji{font-size:1.2rem;margin-bottom:.15rem}
+  #sport-screen .subtitle{font-size:.65rem;margin-bottom:.8rem}
+  .screen{max-width:100%}
+  .timer-container{width:6.5rem;height:6.5rem;margin-bottom:.4rem}
+  .timer-text .time{font-size:1.8rem}
+  .timer-text .unit-label{font-size:.6rem}
+  .ex-card{padding:.5rem;border-radius:.8rem;margin-bottom:.4rem}
+  .ex-card .ex-cn{font-size:1rem}
+  .ex-card .ex-en{font-size:.65rem;margin-bottom:.2rem}
+  .ex-card .ex-meta{font-size:.6rem;gap:.3rem}
+  .ex-card .ex-meta span{padding:.2rem .4rem}
+  .ex-card .ex-cues{font-size:.6rem;padding:.2rem .4rem}
+  .phase-dots{gap:.2rem;margin-bottom:.5rem}
+  .phase-dot{width:1.2rem;height:.2rem}
+  .phase-dot.active{width:2rem}
+  .phase-title{font-size:.8rem;margin-bottom:.4rem}
+  .phase-label{font-size:.6rem}
+  .ex-counter{font-size:.6rem;margin-bottom:.3rem}
+  .btn{padding:.5rem .3rem;font-size:.65rem;border-radius:.6rem;min-height:2.2rem}
+  .btn-row{gap:.25rem}
+  .btn-mic{flex:0 0 2rem;min-width:2rem;font-size:.9rem}
+  #complete-screen h2{font-size:1.1rem}
+  #complete-screen .celebration{font-size:2.5rem}
+  #complete-screen .stat .val{font-size:1.3rem}
+  #complete-screen .stat .lbl{font-size:.6rem}
+  #complete-screen .motivation{font-size:.7rem}
+}
+
+/* ===== SMALL PHONE (250-360px) ===== */
+@media(min-width:251px) and (max-width:360px){
+  html{font-size:15px}
+  #app{padding:.6rem}
+  .timer-container{width:9rem;height:9rem}
+  .timer-text .time{font-size:2.5rem}
+  .ex-card .ex-cn{font-size:1.4rem}
+  .ex-card{padding:.8rem}
+  .btn{font-size:.8rem;min-height:2.5rem}
+}
+
+/* ===== LANDSCAPE PHONE ===== */
+@media(max-height:480px) and (orientation:landscape){
+  #sport-screen{flex-direction:row;flex-wrap:wrap;justify-content:center;gap:.5rem}
+  #sport-screen h1{font-size:1rem;width:100%}
+  #sport-screen .subtitle{width:100%;font-size:.7rem;margin-bottom:.5rem}
+  .sport-grid{grid-template-columns:repeat(7,1fr);gap:.3rem}
+  .sport-btn{min-height:auto;padding:.5rem .2rem;font-size:.65rem}
+  .sport-btn .emoji{font-size:1rem}
+  #workout-screen{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:center;gap:.5rem;padding:.3rem}
+  .phase-dots{width:100%;justify-content:center}
+  .phase-label,.phase-title,.ex-counter{width:100%;text-align:center}
+  .timer-container{width:7rem;height:7rem;margin:0}
+  .ex-card{flex:1;margin-bottom:0}
+  .btn-row{width:100%}
+}
+
+/* ===== SAFE AREA for notched phones ===== */
+@supports(padding:env(safe-area-inset-top)){
+  #app{padding-top:calc(1rem + env(safe-area-inset-top));padding-bottom:calc(1rem + env(safe-area-inset-bottom))}
+  #device-badge{top:calc(.5rem + env(safe-area-inset-top))}
+  #voice-status{top:calc(.5rem + env(safe-area-inset-top))}
+}
+
+/* ===== REDUCED MOTION ===== */
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="device-badge"></div>
+  <div id="voice-status"></div>
+  <div id="ring-status"></div>
+  <div id="cane-status"></div>
+
+  <!-- ===== SPORT SELECTION ===== -->
+  <div id="sport-screen" class="screen active">
+    <h1>🔥 热身教练</h1>
+    <p class="subtitle">选择运动，开始RAMP热身<br><small>或直接说「开始热身」</small></p>
+    <div class="sport-grid" id="sport-grid"></div>
+    <div id="voice-start-hint" class="voice-hint-bar" style="display:none">
+      🎤 试试说：「开始跑步热身」「开始篮球热身」
+    </div>
+    <p style="color:#6b7280;font-size:.7rem;margin-top:.5rem">RAMP = Raise · Activate · Mobilise · Potentiate</p>
+  </div>
+
+  <!-- ===== WORKOUT ===== -->
+  <div id="workout-screen" class="screen">
+    <div class="phase-dots" id="phase-dots"></div>
+    <div class="phase-label" id="phase-label"></div>
+    <div class="phase-title" id="phase-title"></div>
+
+    <div class="timer-container">
+      <svg class="timer-ring" viewBox="0 0 200 200">
+        <defs>
+          <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#f97316"/>
+            <stop offset="100%" stop-color="#ef4444"/>
+          </linearGradient>
+        </defs>
+        <circle class="bg" cx="100" cy="100" r="90"/>
+        <circle class="progress" id="progress-ring" cx="100" cy="100" r="90" stroke-dasharray="565.486" stroke-dashoffset="0"/>
+      </svg>
+      <div class="timer-text" id="timer-text">
+        <span class="time" id="time-display">00</span>
+        <span class="unit-label" id="unit-display"></span>
+      </div>
+      <div class="timer-paused" id="timer-paused"><span>⏸</span></div>
+    </div>
+
+    <div class="ex-counter" id="ex-counter"></div>
+    <div class="voice-cmd-hint" id="voice-cmd-hint"></div>
+
+    <div class="ex-card fade-in" id="ex-card">
+      <div class="ex-cn" id="ex-cn"></div>
+      <div class="ex-en" id="ex-en"></div>
+      <div class="ex-breathe" id="ex-breathe"></div>
+      <div class="ex-meta" id="ex-meta"></div>
+      <div class="ex-cues" id="ex-cues"></div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-secondary" id="btn-prev" onclick="prevExercise()">◀</button>
+      <button class="btn btn-mic" id="btn-mic" onclick="toggleVoiceControl()" title="语音控制">🎤</button>
+      <button class="btn btn-primary" id="btn-pause" onclick="togglePause()">⏸</button>
+      <button class="btn btn-skip" id="btn-skip" onclick="skipExercise()">跳过</button>
+      <button class="btn btn-primary" id="btn-next" onclick="nextExercise()">▶</button>
+    </div>
+  </div>
+
+  <!-- ===== COMPLETE ===== -->
+  <div id="complete-screen" class="screen">
+    <div class="celebration">🎉</div>
+    <h2>热身完成!</h2>
+    <p class="motivation" id="motivation-msg"></p>
+    <div class="stats" id="complete-stats"></div>
+    <button class="btn btn-primary" style="margin-top:1.5rem;max-width:240px" onclick="restart()">重新开始</button>
+  </div>
+</div>
+
+<script>
+// ==================== DATA ====================
+const BASE_PHASES = [
+  {
+    name:"升温 · Raise",duration:"~5分钟",
+    exercises:[
+      {cn:"开合跳",en:"Jumping Jacks",duration:45,unit:"秒",muscles:"全身",cues:"手臂上举过头，双脚同时跳跃分开",breathe:"自然呼吸"},
+      {cn:"高抬腿",en:"High Knees",duration:30,unit:"秒",muscles:"髋屈肌，核心",cues:"膝盖抬高至髋以上，核心收紧，手臂配合摆动",breathe:"呼气抬腿"},
+      {cn:"后踢腿",en:"Butt Kicks",duration:30,unit:"秒",muscles:"腘绳肌，股四头",cues:"脚跟尽量踢到臀部，上体保持直立",breathe:"自然呼吸"},
+      {cn:"侧向滑步",en:"Lateral Shuffles",duration:30,unit:"秒",muscles:"臀中肌，内收肌",cues:"膝盖微屈，保持低重心，左右交替",breathe:"呼气换向"},
+      {cn:"原地小跑",en:"Jog in Place",duration:60,unit:"秒",muscles:"全身有氧",cues:"放松肩膀，自然摆臂，保持节奏",breathe:"鼻吸口呼，保持节奏"},
+    ]
+  },
+  {
+    name:"动态拉伸 · Activate+Mobilise",duration:"~10分钟",
+    exercises:[
+      {cn:"最伟大拉伸 🌟",en:"World's Greatest Stretch",reps:"5-8次/侧",muscles:"髋屈肌，腘绳肌，胸椎，腹股沟",cues:"弓步→肘触地→转体→后移伸直腿",breathe:"吸气准备，呼气转体"},
+      {cn:"尺蠖爬行",en:"Inchworm",reps:"6-8次",muscles:"腘绳肌，核心，肩部",cues:"双手走至平板→双脚小步走近手，腿尽量伸直",breathe:"呼气前屈"},
+      {cn:"蜘蛛侠弓步+转体",en:"Spiderman Lunge w/ Rotation",reps:"5次/侧",muscles:"髋屈肌，胸椎，腹股沟",cues:"弓步脚踩到手外侧→同侧手臂向上旋转打开",breathe:"呼气旋转"},
+      {cn:"行进弓步",en:"Walking Lunges",reps:"10次/侧",muscles:"股四头，臀肌，髋屈肌",cues:"前膝不超过脚尖，后膝接近地面，上身直立",breathe:"呼气下沉"},
+      {cn:"侧弓步",en:"Lateral Lunges",reps:"8次/侧",muscles:"内收肌，臀肌",cues:"向侧方迈大步，弯曲腿膝盖与脚尖同方向",breathe:"呼气侧压"},
+      {cn:"抱膝走",en:"Walking Knee Hugs",reps:"10次/侧",muscles:"臀肌，下背",cues:"双手抱膝向胸拉近，支撑腿保持直立",breathe:"呼气抱膝"},
+      {cn:"直腿前踢",en:"Frankenstein Walks",reps:"10次/侧",muscles:"腘绳肌",cues:"腿伸直前踢，对侧手指触碰脚尖，核心收紧",breathe:"呼气前踢"},
+      {cn:"股四头拉伸走",en:"Walking Quad Stretch",reps:"10次/侧",muscles:"股四头肌",cues:"同侧手抓脚踝向后拉，膝盖并拢，保持平衡",breathe:"自然呼吸"},
+      {cn:"摆腿前后",en:"Leg Swings Fwd/Back",reps:"15次/侧",muscles:"腘绳肌，髋屈肌",cues:"扶墙或保持平衡，腿伸直前后摆动，逐渐增大幅度",breathe:"呼气前摆"},
+      {cn:"摆腿侧向",en:"Leg Swings Side",reps:"15次/侧",muscles:"内收肌，外展肌",cues:"扶墙，腿伸直左右摆动，上身保持稳定",breathe:"呼气外展"},
+      {cn:"手臂绕圈",en:"Arm Circles",reps:"正反各15次",muscles:"肩袖，三角肌",cues:"手臂伸直，从小到大画圈，正反各15次",breathe:"自然呼吸"},
+      {cn:"躯干转体",en:"Torso Twists",reps:"20次",muscles:"胸椎，腹斜肌",cues:"双脚与肩同宽，双臂放松，从腰部旋转",breathe:"呼气转体"},
+      {cn:"髋关节绕圈",en:"Hip Circles",reps:"正反各10次",muscles:"髋关节",cues:"双手叉腰，用髋画大圈，正反各10次",breathe:"自然呼吸"},
+      {cn:"踝关节转动",en:"Ankle Rotations",reps:"正反各10次",muscles:"踝关节",cues:"脚尖点地，转动脚踝画圈，正反各10次",breathe:"自然呼吸"},
+      {cn:"肩部开合",en:"Arm Swings",reps:"15次",muscles:"胸肌，肩部",cues:"双臂在胸前开合，感受胸部拉伸，控制节奏",breathe:"呼气开胸"},
+    ]
+  },
+  {
+    name:"神经激活 · Potentiate",duration:"~2-3分钟",
+    exercises:[
+      {cn:"快速踏步",en:"Fast Feet",duration:10,unit:"秒",muscles:"全身神经激活",cues:"最快速度原地踏步，手臂配合快节奏",breathe:"短促快速呼吸"},
+      {cn:"快速踏步",en:"Fast Feet",duration:10,unit:"秒",muscles:"全身神经激活",cues:"第二组，保持速度！",breathe:"坚持！"},
+      {cn:"快速踏步",en:"Fast Feet",duration:10,unit:"秒",muscles:"全身神经激活",cues:"最后一组，全力以赴！",breathe:"全力！"},
+      {cn:"垂直跳",en:"Squat Jumps",reps:"5-8次",muscles:"下肢爆发力",cues:"深蹲后爆发跳起，落地缓冲，连续进行",breathe:"吸气下蹲，呼气跳起"},
+      {cn:"弓步跳",en:"Split Jumps",reps:"5次/侧",muscles:"冲刺肌群",cues:"弓步姿势，跳起空中换腿，落地保持稳定",breathe:"呼气跳起"},
+      {cn:"加速跑",en:"Strides",reps:"20m×3",muscles:"全身冲刺激活",cues:"逐渐加速至80%最大速度，保持良好跑姿",breathe:"自然呼吸"},
+    ]
+  }
+];
+
+const SPORTS = [
+  {id:"通用",emoji:"🏃",label:"通用"},
+  {id:"跑步",emoji:"🏃‍♂️",label:"跑步"},
+  {id:"篮球",emoji:"🏀",label:"篮球"},
+  {id:"足球",emoji:"⚽",label:"足球"},
+  {id:"游泳",emoji:"🏊",label:"游泳"},
+  {id:"骑行",emoji:"🚴",label:"骑行"},
+  {id:"力量训练",emoji:"🏋️",label:"力量训练"},
+];
+
+const MOTIVATIONS = [
+  "每一次热身都是对身体的尊重。全力以赴，享受今天的训练！💪",
+  "热身到位，训练翻倍！你已经为接下来的运动做好了完美准备。🚀",
+  "好的开始是成功的一半。今天你又会进步一点点！🔥",
+  "身体已经唤醒，肌肉已经激活。去创造属于你的精彩表现吧！⚡",
+  "认真热身的人，运气不会太差。加油！🌟",
+];
+
+// ==================== STATE ====================
+let selectedSport = null;
+let phases = [];
+let currentPhaseIdx = 0;
+let currentExIdx = 0;
+let timerInterval = null;
+let timerSeconds = 0;
+let timerTotal = 0;
+let isTimerRunning = false;
+let isPaused = false;
+let autoAdvanceTimeout = null;
+let totalExercisesDone = 0;
+let startTime = null;
+let voiceControlEnabled = false;
+let recognition = null;
+let wakeLock = null;
+let isWatchMode = false;
+let touchStartX = 0;
+let touchStartY = 0;
+
+// ==================== DEVICE DETECTION ====================
+function detectDevice() {
+  const w = Math.min(window.innerWidth, screen.width||9999);
+  const h = Math.min(window.innerHeight, screen.height||9999);
+  const badge = document.getElementById("device-badge");
+
+  if (w <= 250 || h <= 280) {
+    isWatchMode = true;
+    badge.textContent = "⌚ 手表";
+    document.documentElement.style.fontSize = "14px";
+  } else if (w <= 380) {
+    badge.textContent = "📱 小屏";
+  } else if (w <= 768) {
+    badge.textContent = "📱 手机";
+  } else {
+    badge.textContent = "💻 桌面";
+  }
+}
+
+// ==================== PWA ====================
+function setupPWA() {
+  // Generate inline manifest
+  const manifest = {
+    name:"热身教练 · Warm-Up Coach",
+    short_name:"热身教练",
+    description:"通用运动前热身 — RAMP动态拉伸",
+    start_url:location.href,
+    display:"standalone",
+    orientation:"portrait",
+    theme_color:"#0f0f14",
+    background_color:"#0f0f14",
+    icons:[
+      {src:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🔥%3C/text%3E%3C/svg%3E",sizes:"any",type:"image/svg+xml"}
+    ]
+  };
+  document.getElementById("pwa-manifest").href =
+    "data:application/json;base64," + btoa(JSON.stringify(manifest));
+}
+
+// Wake Lock
+async function requestWakeLock() {
+  try {
+    if ("wakeLock" in navigator) {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => {
+        // Silently try to re-acquire
+        if (document.getElementById("workout-screen").classList.contains("active")) {
+          requestWakeLock();
+        }
+      });
+    }
+  } catch(e) { /* silently fail */ }
+}
+
+async function releaseWakeLock() {
+  try {
+    if (wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch(e) { /* silently fail */ }
+}
+
+// ==================== VIBRATION ====================
+function vibrate(pattern) {
+  try {
+    if ("vibrate" in navigator) {
+      navigator.vibrate(pattern);
+    }
+  } catch(e) { /* silently fail */ }
+}
+
+// ==================== AUDIO BEEP ====================
+function beep(freq=800, duration=100, type="sine") {
+  try {
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type; osc.frequency.value = freq;
+    gain.gain.value = 0.15;
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + duration/1000);
+  } catch(e) { /* silently fail */ }
+}
+
+// ==================== VOICE CONTROL (Speech Recognition) ====================
+function toggleVoiceControl() {
+  if (voiceControlEnabled) {
+    stopVoiceControl();
+  } else {
+    startVoiceControl();
+  }
+}
+
+function startVoiceControl() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    updateVoiceStatus("denied", "浏览器不支持语音");
+    setTimeout(() => updateVoiceStatus(""), 2000);
+    return;
+  }
+
+  recognition = new SpeechRecognition();
+  recognition.lang = "zh-CN";
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = () => {
+    voiceControlEnabled = true;
+    document.getElementById("btn-mic").classList.add("active");
+    updateVoiceStatus("listening", "语音已开启");
+  };
+
+  recognition.onresult = (e) => {
+    const last = e.results[e.results.length - 1];
+    if (!last.isFinal) return;
+    const text = last[0].transcript.trim();
+    handleVoiceCommand(text);
+  };
+
+  recognition.onerror = (e) => {
+    if (e.error === "not-allowed") {
+      stopVoiceControl();
+      updateVoiceStatus("denied", "麦克风被拒绝");
+      setTimeout(() => updateVoiceStatus(""), 3000);
+    } else if (e.error === "no-speech") {
+      // silently continue
+    }
+  };
+
+  recognition.onend = () => {
+    // Auto-restart if still enabled
+    if (voiceControlEnabled) {
+      try { recognition.start(); } catch(e) { /* ignore */ }
+    }
+  };
+
+  try { recognition.start(); } catch(e) { /* ignore */ }
+}
+
+function stopVoiceControl() {
+  voiceControlEnabled = false;
+  document.getElementById("btn-mic").classList.remove("active");
+  if (recognition) {
+    try { recognition.stop(); } catch(e) { /* ignore */ }
+    recognition = null;
+  }
+  updateVoiceStatus("");
+}
+
+function updateVoiceStatus(cls, msg) {
+  const el = document.getElementById("voice-status");
+  el.className = cls ? cls : "";
+  if (cls === "listening") {
+    el.innerHTML = `<span class="pulse-dot"></span> ${msg}`;
+    el.style.display = "flex";
+  } else if (cls === "denied") {
+    el.textContent = msg;
+    el.style.display = "flex";
+  } else {
+    el.style.display = "none";
+  }
+}
+
+function handleVoiceCommand(text) {
+  const cmd = text.toLowerCase().replace(/[，。！？、\s]/g, "");
+
+  // Start sports
+  for (const s of SPORTS) {
+    if (cmd.includes("开始" + s.label) || cmd.includes(s.label + "热身")) {
+      if (document.getElementById("sport-screen").classList.contains("active")) {
+        startWorkout(s.id);
+        return;
+      }
+    }
+  }
+
+  // Generic start
+  if (cmd.includes("开始热身") || cmd.includes("开始训练") || cmd.includes("开始运动")) {
+    if (document.getElementById("sport-screen").classList.contains("active")) {
+      startWorkout("通用");
+      return;
+    }
+  }
+
+  // Workout navigation
+  if (document.getElementById("workout-screen").classList.contains("active")) {
+    if (cmd.includes("下一个") || cmd.includes("继续") || cmd === "next") {
+      nextExercise(); vibrate([30]); return;
+    }
+    if (cmd.includes("上一个") || cmd.includes("返回") || cmd === "prev" || cmd === "back") {
+      prevExercise(); vibrate([30]); return;
+    }
+    if (cmd.includes("跳过") || cmd === "skip") {
+      skipExercise(); vibrate([30]); return;
+    }
+    if (cmd.includes("暂停") || cmd === "pause") {
+      if (!isPaused) { togglePause(); vibrate([30]); } return;
+    }
+    if (cmd.includes("继续") || cmd === "resume") {
+      if (isPaused) { togglePause(); vibrate([30]); } return;
+    }
+    if (cmd.includes("完成") || cmd.includes("结束")) {
+      if (isPaused) { stopTimer(); showComplete(); } return;
+    }
+  }
+  // Unknown command
+  document.getElementById("voice-cmd-hint").textContent = `🗣 听到: "${text}" — 试试说「下一个」「暂停」「跳过」`;
+  setTimeout(() => {
+    const hint = document.getElementById("voice-cmd-hint");
+    if (hint.textContent.startsWith("🗣 听到:")) hint.textContent = "";
+  }, 2500);
+}
+
+// ==================== SPEECH (TTS) ====================
+const SPEECH_QUEUE = [];
+let isSpeaking = false;
+
+function getZhVoice() {
+  const voices = window.speechSynthesis.getVoices();
+  return voices.find(v => v.lang === "zh-CN") ||
+         voices.find(v => v.lang.startsWith("zh") && v.localService) ||
+         voices.find(v => v.lang.startsWith("zh")) ||
+         voices.find(v => v.lang.startsWith("cmn")) ||
+         voices.find(v => v.lang.startsWith("yue")) ||
+         null;
+}
+
+function speak(text, rate=0.9, pitch=1.1, priority=false) {
+  if (!window.speechSynthesis) return;
+  if (priority) {
+    window.speechSynthesis.cancel();
+    SPEECH_QUEUE.length = 0;
+    isSpeaking = false;
+  }
+  SPEECH_QUEUE.push({text,rate,pitch});
+  if (!isSpeaking) processSpeechQueue();
+}
+
+function processSpeechQueue() {
+  if (SPEECH_QUEUE.length === 0) { isSpeaking = false; return; }
+  isSpeaking = true;
+  const {text,rate,pitch} = SPEECH_QUEUE.shift();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang = "zh-CN";
+  utt.rate = rate;
+  utt.pitch = pitch;
+  utt.volume = 1;
+  const zhVoice = getZhVoice();
+  if (zhVoice) utt.voice = zhVoice;
+  utt.onend = () => processSpeechQueue();
+  utt.onerror = () => processSpeechQueue();
+  window.speechSynthesis.speak(utt);
+}
+
+function speakExerciseFull(ex, isNewPhase) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  SPEECH_QUEUE.length = 0;
+  isSpeaking = false;
+
+  const clean = ex.cn.replace(/[🌟🔥⚡💪🏃🚀🎉🏀⚽🏊🚴🏋️]/g,"").trim();
+
+  if (isNewPhase && phases[currentPhaseIdx]) {
+    speak(`第${currentPhaseIdx+1}阶段，${phases[currentPhaseIdx].name}`, 0.85, 1.0);
+  }
+
+  speak(clean, 0.85, 1.1);
+
+  if (ex.duration && ex.duration > 0) {
+    speak(`${ex.duration}秒，开始`, 0.9, 1.0);
+  } else if (ex.reps) {
+    speak(`${ex.reps}，开始`, 0.9, 1.0);
+  }
+
+  if (ex.cues) {
+    speak(ex.cues.replace(/[🌟🔥⚡💪🏃🚀🎉🏀⚽🏊🚴🏋️，、]/g," "), 0.8, 0.95);
+  }
+
+  if (ex.breathe) {
+    speak(`呼吸提示：${ex.breathe}`, 0.7, 0.9);
+  }
+}
+
+function speakCountdown(n) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  SPEECH_QUEUE.length = 0;
+  isSpeaking = false;
+  const count = ["零","一","二","三","四","五","六","七","八","九","十"];
+  speak(count[n]||String(n), 1.0, 1.2, true);
+  beep(600 + n*200, 80);
+}
+
+// ==================== SPORT ADAPTATIONS ====================
+function adaptPhases(sportId) {
+  const p = JSON.parse(JSON.stringify(BASE_PHASES));
+  switch(sportId) {
+    case "跑步":
+      p[2].exercises.splice(3,0,
+        {cn:"快速踏步",en:"Fast Feet",duration:10,unit:"秒",muscles:"全身神经激活",cues:"额外组！保持高频率",breathe:"冲刺！"},
+        {cn:"快速踏步",en:"Fast Feet",duration:10,unit:"秒",muscles:"全身神经激活",cues:"再加一组！挑战极限步频",breathe:"极限！"},
+      );
+      p[2].exercises.push(
+        {cn:"加速跑",en:"Strides",reps:"30m×2",muscles:"全身冲刺激活",cues:"跑步专项：加速至80%最大速度",breathe:"自然呼吸"},
+      );
+      break;
+    case "篮球":
+      p[2].exercises.splice(3,0,
+        {cn:"垂直跳",en:"Squat Jumps",reps:"8-10次",muscles:"下肢爆发力",cues:"篮球专项：全力跳起，模拟抢篮板",breathe:"爆发！"},
+        {cn:"垂直跳",en:"Squat Jumps",reps:"8-10次",muscles:"下肢爆发力",cues:"再来一组！注重弹跳高度",breathe:"更高！"},
+      );
+      break;
+    case "游泳":
+      p[1].exercises.push(
+        {cn:"手臂绕圈(大)",en:"Arm Circles Large",reps:"正反各20次",muscles:"肩袖，三角肌",cues:"游泳专项：肩关节大范围活动",breathe:"自然呼吸"},
+        {cn:"躯干转体(加强)",en:"Torso Twists Plus",reps:"30次",muscles:"胸椎，腹斜肌",cues:"游泳专项：增加旋转幅度",breathe:"呼气转体"},
+      );
+      p[2].exercises = [
+        {cn:"手臂绕圈",en:"Arm Circles",reps:"正反各20次",muscles:"肩袖，三角肌",cues:"游泳专项：快速手臂绕圈",breathe:"自然呼吸"},
+        {cn:"肩部开合",en:"Arm Swings",reps:"20次",muscles:"胸肌，肩部",cues:"游泳专项：激活划水肌群",breathe:"呼气开胸"},
+        {cn:"垂直跳",en:"Squat Jumps",reps:"5次",muscles:"下肢爆发力",cues:"出发台激活",breathe:"吸气下蹲，呼气跳起"},
+      ];
+      break;
+    case "足球":
+      p[0].exercises.splice(3,0,
+        {cn:"侧向滑步(快)",en:"Lateral Shuffles Fast",duration:20,unit:"秒",muscles:"臀中肌，内收肌",cues:"足球专项：更快速度侧向移动",breathe:"快速呼吸"},
+      );
+      p[2].exercises.splice(3,0,
+        {cn:"快速踏步(变向)",en:"Fast Feet w/ Change",duration:10,unit:"秒",muscles:"全身敏捷",cues:"足球专项：踏步中加入左右变向",breathe:"灵活！"},
+      );
+      break;
+    case "力量训练":
+      p[1].exercises.push(
+        {cn:"腕关节绕圈",en:"Wrist Circles",reps:"正反各15次",muscles:"腕关节",cues:"力量训练专项：手腕充分活动",breathe:"自然呼吸"},
+        {cn:"肩关节环绕",en:"Shoulder Rolls",reps:"正反各10次",muscles:"肩袖",cues:"力量训练专项：大范围肩关节环绕",breathe:"自然呼吸"},
+      );
+      p[2].exercises = [
+        {cn:"快速踏步",en:"Fast Feet",duration:15,unit:"秒",muscles:"全身神经激活",cues:"轻量激活，为力量训练做准备",breathe:"轻松呼吸"},
+        {cn:"垂直跳",en:"Squat Jumps",reps:"3-5次",muscles:"下肢爆发力",cues:"少量爆发激活即可",breathe:"吸气下蹲，呼气跳起"},
+      ];
+      break;
+    case "骑行":
+      p[1].exercises.push(
+        {cn:"行进弓步(加强)",en:"Walking Lunges Plus",reps:"15次/侧",muscles:"股四头，臀肌",cues:"骑行专项：增加弓步幅度",breathe:"呼气下沉"},
+      );
+      p[2].exercises.splice(3,0,
+        {cn:"快速踏步(高)",en:"Fast Feet High",duration:15,unit:"秒",muscles:"下肢激活",cues:"骑行专项：高频踏步模拟高踏频",breathe:"高踏频！"},
+      );
+      break;
+  }
+  return p;
+}
+
+// ==================== INIT ====================
+function initSportPicker() {
+  const grid = document.getElementById("sport-grid");
+  grid.innerHTML = "";
+  SPORTS.forEach(s => {
+    const btn = document.createElement("button");
+    btn.className = "sport-btn";
+    btn.innerHTML = `<span class="emoji">${s.emoji}</span><span class="label">${s.label}</span>`;
+    btn.onclick = () => startWorkout(s.id);
+    grid.appendChild(btn);
+  });
+}
+
+function startWorkout(sportId) {
+  selectedSport = sportId;
+  phases = adaptPhases(sportId);
+  currentPhaseIdx = 0; currentExIdx = 0;
+  totalExercisesDone = 0; startTime = Date.now();
+  stopTimer(); isPaused = false;
+
+  showScreen("workout-screen");
+  requestWakeLock();
+  renderWorkout();
+
+  // Start voice control automatically on mobile/watch
+  if (isWatchMode || window.innerWidth <= 480) {
+    startVoiceControl();
+  }
+
+  // Hint available voice commands
+  document.getElementById("voice-cmd-hint").textContent =
+    voiceControlEnabled ? "" : '🎤 点麦克风开启语音：说「下一个」「跳过」「暂停」';
+}
+
+function showScreen(id) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+}
+
+// ==================== SWIPE GESTURES ====================
+function setupSwipe() {
+  const ws = document.getElementById("workout-screen");
+  ws.addEventListener("touchstart", e => {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+  }, {passive:true});
+  ws.addEventListener("touchend", e => {
+    if (!document.getElementById("workout-screen").classList.contains("active")) return;
+    const dx = (e.changedTouches[0]||{}).clientX - touchStartX;
+    const dy = (e.changedTouches[0]||{}).clientY - touchStartY;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
+      if (dx < -40) { nextExercise(); vibrate([20]); }   // swipe left → next
+      else if (dx > 40) { prevExercise(); vibrate([20]); } // swipe right → prev
+    }
+    if (dy > 60 && Math.abs(dy) > Math.abs(dx)*1.5) {
+      skipExercise(); vibrate([20]); // swipe down → skip
+    }
+  }, {passive:true});
+}
+
+// ==================== WORKOUT RENDERING ====================
+function renderWorkout(isNewPhase=false) {
+  const phase = phases[currentPhaseIdx];
+  const ex = phase.exercises[currentExIdx];
+
+  // Phase dots
+  const dots = document.getElementById("phase-dots");
+  dots.innerHTML = "";
+  phases.forEach((p, i) => {
+    const d = document.createElement("div");
+    d.className = "phase-dot";
+    if (i < currentPhaseIdx) d.classList.add("done");
+    else if (i === currentPhaseIdx) d.classList.add("active");
+    dots.appendChild(d);
+  });
+
+  document.getElementById("phase-label").textContent = `第${currentPhaseIdx+1}阶段 · ${phase.duration}`;
+  document.getElementById("phase-title").textContent = phase.name;
+  document.getElementById("ex-counter").textContent = `${currentExIdx+1}/${phase.exercises.length}`;
+
+  // Exercise card
+  document.getElementById("ex-cn").textContent = ex.cn;
+  document.getElementById("ex-en").textContent = ex.en;
+  document.getElementById("ex-breathe").textContent = ex.breathe ? `🫁 ${ex.breathe}` : "";
+  document.getElementById("ex-cues").textContent = `💡 ${ex.cues}`;
+
+  // Meta
+  const meta = document.getElementById("ex-meta");
+  meta.innerHTML = "";
+  if (ex.duration) meta.innerHTML += `<span class="highlight">⏱ ${ex.duration}${ex.unit||"秒"}</span>`;
+  if (ex.reps) meta.innerHTML += `<span class="highlight">🔄 ${ex.reps}</span>`;
+  if (ex.muscles) meta.innerHTML += `<span>💪 ${ex.muscles}</span>`;
+
+  // Timer
+  if (ex.duration) {
+    timerTotal = ex.duration; timerSeconds = ex.duration;
+    document.getElementById("timer-text").innerHTML =
+      `<span class="time" id="time-display">${timerSeconds}</span>
+       <span class="unit-label" id="unit-display">${ex.unit||"秒"}</span>`;
+    document.querySelector(".timer-ring").style.display = "";
+    document.getElementById("timer-paused").classList.remove("show");
+  } else {
+    timerTotal = 0; timerSeconds = 0;
+    document.getElementById("timer-text").innerHTML =
+      `<span class="rep-label" id="time-display">${ex.reps||""}</span>
+       <span class="unit-label" id="unit-display">次</span>`;
+    document.querySelector(".timer-ring").style.display = "";
+    document.getElementById("timer-paused").classList.remove("show");
+    setRingProgress(0);
+  }
+
+  updateRing();
+
+  // Buttons
+  document.getElementById("btn-prev").style.display =
+    (currentPhaseIdx === 0 && currentExIdx === 0) ? "none" : "";
+  const isLast = currentPhaseIdx === phases.length-1 && currentExIdx === phase.exercises.length-1;
+  document.getElementById("btn-next").textContent = isLast ? "完成 ✓" : "▶";
+  document.getElementById("btn-skip").style.display = isLast ? "none" : "";
+  document.getElementById("btn-pause").textContent = "⏸";
+
+  // Re-trigger fade
+  const card = document.getElementById("ex-card");
+  card.classList.remove("fade-in");
+  void card.offsetWidth;
+  card.classList.add("fade-in");
+
+  // Voice + timer
+  speakExerciseFull(ex, isNewPhase);
+  if (ex.duration && ex.duration > 0) {
+    startTimer();
+  } else {
+    stopTimer();
+  }
+
+  // Update pause button & overlay
+  document.getElementById("btn-pause").textContent = isPaused ? "▶" : "⏸";
+  document.getElementById("timer-paused").classList.toggle("show", isPaused && ex.duration > 0);
+}
+
+function setRingProgress(pct) {
+  const circ = 2 * Math.PI * 90;
+  document.getElementById("progress-ring").setAttribute("stroke-dashoffset", circ * (1 - pct));
+}
+
+function updateRing() {
+  if (timerTotal > 0) {
+    setRingProgress(timerSeconds / timerTotal);
+    const timeEl = document.getElementById("time-display");
+    if (timeEl) timeEl.textContent = timerSeconds;
+  }
+}
+
+// ==================== TIMER ====================
+function startTimer() {
+  stopTimer();
+  if (timerTotal <= 0 || isPaused) return;
+  isTimerRunning = true; updateRing();
+  timerInterval = setInterval(() => {
+    if (isPaused) return;
+    timerSeconds--;
+    if (timerSeconds < 0) timerSeconds = 0;
+    updateRing();
+
+    // Countdown beep + voice at 5,4,3,2,1
+    if (timerSeconds <= 5 && timerSeconds > 0) {
+      beep(800, 60);
+      const timeEl = document.getElementById("time-display");
+      if (timeEl) { timeEl.classList.remove("countdown-flash"); void timeEl.offsetWidth; timeEl.classList.add("countdown-flash"); }
+    }
+    // Last 3 seconds: voice countdown
+    if (timerSeconds === 3 || timerSeconds === 2 || timerSeconds === 1) {
+      speakCountdown(timerSeconds);
+    }
+    // Buzzer at 0
+    if (timerSeconds === 0) {
+      beep(400, 300, "square");
+      vibrate([50,30,50]);
+    }
+
+    if (timerSeconds <= 0) {
+      stopTimer();
+      autoAdvanceTimeout = setTimeout(() => {
+        autoAdvanceTimeout = null;
+        if (!isTimerRunning && !isPaused) nextExercise();
+      }, 1000);
+    }
+  }, 1000);
+}
+
+function stopTimer() {
+  isTimerRunning = false;
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  if (autoAdvanceTimeout) { clearTimeout(autoAdvanceTimeout); autoAdvanceTimeout = null; }
+}
+
+// ==================== PAUSE ====================
+function togglePause() {
+  if (!document.getElementById("workout-screen").classList.contains("active")) return;
+  isPaused = !isPaused;
+  document.getElementById("btn-pause").textContent = isPaused ? "▶" : "⏸";
+
+  const ex = phases[currentPhaseIdx]?.exercises[currentExIdx];
+  if (ex?.duration > 0) {
+    document.getElementById("timer-paused").classList.toggle("show", isPaused);
+    if (isPaused) {
+      window.speechSynthesis?.cancel();
+      vibrate([40]);
+    } else {
+      vibrate([20]);
+      // Resume voice
+      if (timerSeconds > 0) {
+        speak(`${timerSeconds}秒，继续`, 0.9, 1.0);
+      }
+    }
+  }
+}
+
+// ==================== NAVIGATION ====================
+function nextExercise() {
+  stopTimer();
+  totalExercisesDone++;
+  if (timerTotal > 0) totalExercisesDone += timerTotal - timerSeconds;
+
+  const phase = phases[currentPhaseIdx];
+  if (currentExIdx < phase.exercises.length - 1) {
+    currentExIdx++;
+    renderWorkout();
+  } else if (currentPhaseIdx < phases.length - 1) {
+    currentPhaseIdx++;
+    currentExIdx = 0;
+    // Phase transition beep
+    beep(1000, 150);
+    setTimeout(() => beep(1200, 150), 200);
+    vibrate([30,50,30]);
+    speak(`${phases[currentPhaseIdx].name}，${phases[currentPhaseIdx].duration}`, 0.8, 1.0, true);
+    renderWorkout(true);
+  } else {
+    showComplete();
+  }
+}
+
+function prevExercise() {
+  stopTimer();
+  if (currentExIdx > 0) {
+    currentExIdx--;
+  } else if (currentPhaseIdx > 0) {
+    currentPhaseIdx--;
+    currentExIdx = phases[currentPhaseIdx].exercises.length - 1;
+  }
+  renderWorkout();
+}
+
+function skipExercise() {
+  stopTimer(); vibrate([15]);
+  nextExercise();
+}
+
+function restart() {
+  stopTimer();
+  stopVoiceControl();
+  releaseWakeLock();
+  showScreen("sport-screen");
+}
+
+// ==================== COMPLETE ====================
+function showComplete() {
+  stopTimer();
+  releaseWakeLock();
+  const totalSec = Math.round((Date.now() - startTime) / 1000);
+  const min = Math.floor(totalSec/60);
+  const sec = totalSec%60;
+  document.getElementById("complete-stats").innerHTML = `
+    <div class="stat"><div class="val">${totalExercisesDone}</div><div class="lbl">完成动作</div></div>
+    <div class="stat"><div class="val">${min}:${String(sec).padStart(2,"0")}</div><div class="lbl">总用时</div></div>
+    <div class="stat"><div class="val">${phases.length}</div><div class="lbl">训练阶段</div></div>
+  `;
+  document.getElementById("motivation-msg").textContent =
+    MOTIVATIONS[Math.floor(Math.random()*MOTIVATIONS.length)];
+  showScreen("complete-screen");
+
+  // Victory fanfare
+  beep(523,150); setTimeout(() => beep(659,150), 150);
+  setTimeout(() => beep(784,300), 300);
+  vibrate([30,40,30,40,60]);
+  speak("热身完成！做得好！", 0.85, 1.2, true);
+}
+
+// ==================== SMART RING (DeviceOrientation) ====================
+let ringActive = false;
+let ringFrame = 0;
+let ringPrevBeta = null, ringPrevGamma = null;
+
+function setupRing() {
+  if (typeof DeviceOrientationEvent === 'undefined') return;
+  const badge = document.getElementById('ring-status');
+
+  if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+    // iOS 13+
+    badge.style.display = 'flex';
+    badge.textContent = '💍 点击启用';
+    badge.style.cursor = 'pointer';
+    badge.onclick = async () => {
+      try {
+        const perm = await DeviceOrientationEvent.requestPermission();
+        if (perm === 'granted') {
+          ringActive = true;
+          badge.className = 'active';
+          badge.textContent = '💍 已连接';
+          badge.style.cursor = 'default';
+          badge.onclick = null;
+          window.addEventListener('deviceorientation', handleRingOrientation);
+        }
+      } catch(e) { badge.textContent = '💍 不支持'; }
+    };
+  } else {
+    // Android / desktop
+    ringActive = true;
+    badge.className = 'active';
+    badge.textContent = '💍 已连接';
+    window.addEventListener('deviceorientation', handleRingOrientation);
+  }
+}
+
+function handleRingOrientation(e) {
+  if (!ringActive) return;
+  ringFrame++;
+  if (ringFrame % 8 !== 0) return;
+  const beta = e.beta || 0;
+  const gamma = e.gamma || 0;
+  if (ringPrevBeta === null) { ringPrevBeta = beta; ringPrevGamma = gamma; return; }
+  const dBeta = Math.abs(beta - ringPrevBeta);
+  const dGamma = Math.abs(gamma - ringPrevGamma);
+  ringPrevBeta = beta; ringPrevGamma = gamma;
+  // Tilt > 5° directional or shake > 20° confirm → skip
+  if (dBeta > 5 || dGamma > 5 || dBeta > 20 || dGamma > 20) {
+    if (document.getElementById('workout-screen').classList.contains('active')) {
+      skipExercise();
+    }
+  }
+}
+
+// ==================== SMART CANE (DeviceMotion) ====================
+let caneActive = false;
+let caneFrame = 0;
+let caneLastAccel = {x:0, y:0, z:0};
+
+function setupCane() {
+  if (typeof DeviceMotionEvent === 'undefined') return;
+  const badge = document.getElementById('cane-status');
+
+  if (typeof DeviceMotionEvent.requestPermission === 'function') {
+    // iOS 13+
+    badge.style.display = 'flex';
+    badge.textContent = '🦯 点击启用';
+    badge.style.cursor = 'pointer';
+    badge.onclick = async () => {
+      try {
+        const perm = await DeviceMotionEvent.requestPermission();
+        if (perm === 'granted') {
+          caneActive = true;
+          badge.className = 'active';
+          badge.textContent = '🦯 已连接';
+          badge.style.cursor = 'default';
+          badge.onclick = null;
+          window.addEventListener('devicemotion', handleCaneMotion);
+        }
+      } catch(e) { badge.textContent = '🦯 不支持'; }
+    };
+  } else {
+    caneActive = true;
+    badge.className = 'active';
+    badge.textContent = '🦯 已连接';
+    window.addEventListener('devicemotion', handleCaneMotion);
+  }
+}
+
+function handleCaneMotion(e) {
+  if (!caneActive) return;
+  caneFrame++;
+  if (caneFrame % 6 !== 0) return;
+  const a = e.accelerationIncludingGravity || e.acceleration || {x:0, y:0, z:0};
+  const ax = a.x || 0, ay = a.y || 0, az = a.z || 0;
+  const dax = Math.abs(ax - caneLastAccel.x);
+  const day = Math.abs(ay - caneLastAccel.y);
+  const daz = Math.abs(az - caneLastAccel.z);
+  const swingMag = Math.sqrt(ax*ax + ay*ay) - 9.8;
+  caneLastAccel = {x:ax, y:ay, z:az};
+  // Accel spike > 8 = tap → toggle pause
+  if (dax > 8 || day > 8 || daz > 8) {
+    if (document.getElementById('workout-screen').classList.contains('active')) {
+      togglePause();
+    }
+  } else if (Math.abs(swingMag) > 3) {
+    // Swing > 3 = direction → skip
+    if (document.getElementById('workout-screen').classList.contains('active')) {
+      skipExercise();
+    }
+  }
+}
+
+// ==================== STARTUP ====================
+detectDevice();
+setupPWA();
+setupSwipe();
+setupRing();
+setupCane();
+initSportPicker();
+
+// Preload voices
+if (window.speechSynthesis) {
+  window.speechSynthesis.getVoices();
+  window.speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+}
+
+// Detect mic permission for hint
+if (navigator.permissions) {
+  navigator.permissions.query({name:"microphone"}).then(r => {
+    if (r.state === "granted") {
+      document.getElementById("voice-start-hint").style.display = "block";
+    }
+  }).catch(() => {});
+}
+
+// Listen for page visibility to manage wake lock
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    releaseWakeLock();
+  } else if (document.getElementById("workout-screen").classList.contains("active")) {
+    requestWakeLock();
+  }
+});
+
+// Handle window resize
+window.addEventListener("resize", detectDevice);
+
+console.log("🔥 热身教练已就绪");
+console.log("  ⌚ 手表模式:", isWatchMode);
+console.log("  🎤 语音命令: 说「下一个」「跳过」「暂停」「继续」");
+console.log("  👆 滑动手势: 左滑下一个 | 右滑上一个 | 下滑跳过");
+console.log("  📱 PWA: 可添加到主屏幕离线使用");
+</script>
+</body>
+</html>

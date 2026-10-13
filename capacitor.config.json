@@ -1,0 +1,11 @@
+{
+  "appId": "com.skat.warmupcoach",
+  "appName": "热身教练",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}
